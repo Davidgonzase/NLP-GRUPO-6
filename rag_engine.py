@@ -2,6 +2,19 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 import ollama
 import config
+from langdetect import detect, LangDetectException
+LANGUAGE_MAP = {
+    'es': 'Spanish',
+    'en': 'English',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'nl': 'Dutch',
+    'ru': 'Russian',
+    'zh-cn': 'Chinese',
+    'ja': 'Japanese'
+}
 
 class FactChecker:
     def __init__(self):
@@ -40,32 +53,67 @@ class FactChecker:
 
         context_str = "\n\n".join(documents)
         
-        # 2. Construct Prompt
+        # 2. Detect Language
+        try:
+            detected_lang_code = detect(claim)
+            detected_lang = LANGUAGE_MAP.get(detected_lang_code, "English")
+            print(detected_lang)
+        except LangDetectException:
+            detected_lang = "English" # Fallback to English
+
+        # 3. Construct Prompt
         prompt = f"""
 You are an expert fact-checker. Your task is to verify a claim based ONLY on the provided context.
 
-CONTEXT:
+CONTEXT (Information Source):
 {context_str}
 
-CLAIM TO VERIFY:
+CLAIM TO VERIFY (User Query):
 "{claim}"
 
 INSTRUCTIONS:
 1. Analyze the claim and the context.
-2. If the context supports the claim, verdict is "SUPPORTED".
-3. If the context contradicts the claim, verdict is "REFUTED".
-4. If there is no relevant info, verdict is "INSUFFICIENT INFO".
+2. **CRITICAL:** The language of the claim is '{detected_lang}'. You MUST answer in '{detected_lang}'.
+   - Do NOT answer in English unless '{detected_lang}' is 'en'.
+
+VERDICT CRITERIA:
+- SUPPORTED:
+    * The context provides strong evidence that explicitly confirms the claim.
+    * Minor details may differ if the core claim is accurate (e.g., "around 100 people" vs "102 people").
+    * If the claim is a generalization effectively supported by specific examples in the context.
+- REFUTED:
+    * The context explicitly contradicts the core assertion of the claim.
+    * The context provides mutually exclusive information (e.g., Claim: "X is red", Context: "X is blue").
+    * Significant numerical or factual discrepancies exist.
+- INSUFFICIENT INFO:
+    * The context is unrelated to the claim.
+    * The context mentions the subject but doesn't address the specific assertion in the claim.
+    * The evidence is ambiguous or too vague to make a definitive judgment.
+    * Do NOT hallucinate info not in the context to force a verdict.
 
 OUTPUT FORMAT (STRICT):
-- Verdict: [SUPPORTED | REFUTED | INSUFFICIENT INFO] (Translated to the language of the CLAIM)
-- Confidence Score: [0-100]%
-- Explanation: A brief reasoning (1 sentence) explaining why. (Translated to the language of the CLAIM)
-- Quote: The original text from the context used as evidence.
+The following output format MUST be written in the SAME LANGUAGE as the claim. This is a STRICT CRITERIA, you have to strictily respond in the same language as the claim.
+This is the output format,translated to the claim language, you should follow:
+- Verdict: [SUPPORTED | REFUTED | INSUFFICIENT INFO]
+- Explanation: A brief reasoning based on the context.
+- Quote: The original text from the context used as evidence. The quote extracted from the context must be in the same language as the claim.
+NEVER INCLUDE in your output reasoning, opinions, chain of thinkings or any other text that is not the output format.
 
-CRITICAL RULE:
-You MUST answer in the SAME LANGUAGE as the "CLAIM TO VERIFY".
-If the claim is in French, the entire response (Verification, Explanation) MUST be in French.
-If the claim is in Spanish, use Spanish.
+EXAMPLES OF CLAIMS AND RESPONSES:
+(CLAIM with language english)
+Claim: "The Eiffel Tower is located in Berlin."
+Response:
+Verdict: REFUTED
+Explanation: The context states that the Eiffel Tower is in Paris, France, not Berlin.
+Quote: "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France."
+
+(CLAIM with language spanish)
+Claim: "La inteligencia artificial puede superar a los humanos en tareas específicas."
+Response:
+Veredicto: RESPALDADO
+Explicación: El contexto menciona que la inteligencia artificial ha superado a los humanos en juegos como el ajedrez y Go.
+Cita:"La inteligencia artificial ha demostrado ser capaz de superar a los humanos en juegos complejos
+Note how the output is translated to the claim language, the response is in the same language as the claim, including the Verdict,Explanation and Quote titles. This is the procedure you must follow strictly.
 """
 
         # 3. Query LLM (Ollama)

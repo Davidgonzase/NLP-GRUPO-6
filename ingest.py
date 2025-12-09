@@ -5,7 +5,7 @@ import wikipediaapi
 import config
 import tqdm
 
-def get_wikipedia_content(topic, lang="es"):
+def get_wikipedia_content(topic, lang="en"):
     """
     Fetches the content of a Wikipedia page.
     """

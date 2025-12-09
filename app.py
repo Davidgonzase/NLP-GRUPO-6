@@ -34,22 +34,9 @@ def main():
             checker = get_fact_checker()
             verdict, sources = checker.verify_claim(query)
             
-        # Parse response for Confidence Score
-        import re
-        confidence_match = re.search(r"Confidence Score:\s*(\d+)%", verdict)
-        confidence_val = int(confidence_match.group(1)) if confidence_match else 0
-        
-        # Remove the confidence line from the display text to avoid duplication
-        verdict_display = re.sub(r"Confidence Score:.*\n?", "", verdict)
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.subheader("💡 Veredicto")
-            st.markdown(verdict_display)
-        with col2:
-            st.subheader("Confianza")
-            st.metric(label="Certeza", value=f"{confidence_val}%")
-            st.progress(confidence_val / 100)
+        # Display Verdict
+        st.subheader("💡 Veredicto")
+        st.markdown(verdict)
         
         # Sources Expander
         with st.expander("📚 Fuentes Recuperadas (Evidencia)"):
