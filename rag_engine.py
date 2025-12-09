@@ -14,7 +14,7 @@ class FactChecker:
         # Initialize Embedding Model
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         
-    def retrieve_context(self, query, n_results=5):
+    def retrieve_context(self, query, n_results=6):
         """
         Retrieves relevant documents from ChromaDB.
         """
@@ -66,62 +66,48 @@ CONTEXT:
 CLAIM:
 "{claim}"
 
-VERIFICATION PROCESS:
-
-1. ENTITY EXTRACTION
-   - Identify key entities in the claim: names, numbers, dates, locations, technologies, organizations
-   - Extract corresponding entities from the context
-   
-2. LOGICAL COMPARISON
-   - Compare extracted facts directly
-   - Named entities are mutually exclusive: "GPT" ≠ "BERT", "Paris" ≠ "Berlin", "2020" ≠ "2021"
-   - Check if the relationship/assertion matches between claim and context
-   
-3. EVIDENCE ASSESSMENT
-   Critical distinctions:
-   - Core facts vs. peripheral details (e.g., "approximately 100" vs "102" is acceptable variance)
-   - Explicit statements vs. implications
-   - Direct contradictions vs. missing information
-
-VERDICT RULES:
-
-SUPPORTED - Use when:
+FOLLOW THESE INSTRUCTIONS:
+1. VERDICT RULES:
+Define a veredict of TRUE when:
 - Context explicitly confirms the claim's core assertion
 - Facts exposed in the context mathces the entities(names, numbers, relationships) or affirmationes stablished on the claim
 - Minor stylistic differences are acceptable (e.g., "CEO" vs "Chief Executive Officer")
 
-REFUTED - Use when:
+Define a veredict of FALSE when:
 - Context contradicts the claim with different facts
-- Key entities mismatch (different names, numbers, dates between the facts in the context and the claim)
 - Context explicitly states the opposite
+- **CRITICAL:** Do NOT use FALSE simply because there in no information about the claim in the context. You must point to a specific sentence that makes the claim **impossible** to be true.
 
-INSUFFICIENT INFO - Use when:
+Define a veredict of INSUFFICIENT INFO when:
 - Context doesn't address the specific claim
 - Context is too vague or ambiguous
 - Subject mentioned but assertion not covered
 - Never infer beyond what's explicitly stated
 
-OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict, explanation and quote:
+2. QUOTE EXTRACTION CRITERIA:
+- The quote must be valuable for evidencing your decision
+- The quote must be extracted from the context
+- The quote must not include information that is not relevant for supporting the verdict
 
-Verdict: [SUPPORTED | REFUTED | INSUFFICIENT INFO]\n
+3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict, explanation and quote:
+Verdict: [TRUE | FALSE | INSUFFICIENT INFO]\n
 Explanation: [1-2 sentences comparing claim facts to context facts, highlighting matches or mismatches]\n
-Quote: "[Exact text from context supporting your verdict. This quote must be valuable for evidencing your decision, so avoid including non-informative text]"
+Quote: "[Quote extracted from the context supporting your verdict]"
 
-OUTPUT EXAMPLES:
-
-Example 1: SUPPORTED:
+4. OUTPUT EXAMPLES:
+Example 1: TRUE:
 Claim: "BERT was introduced by Google in 2018."
 Context: "Google released BERT in 2018 as a breakthrough in NLP."
 OUTPUT:
-Verdict: SUPPORTED
+Verdict: TRUE
 Explanation: The context confirms BERT was released by Google in 2018, matching all key entities in the claim.
 Quote: "Google released BERT in 2018 as a breakthrough in NLP."
 
-Example 2 - REFUTED:
+Example 2 - FALSE:
 Claim: "The Eiffel Tower is in Berlin."
 Context: "The Eiffel Tower is located in Paris, France."
 OUTPUT:
-Verdict: REFUTED
+Verdict: FALSE
 Explanation: The claim states Berlin as the location, but the context explicitly states Paris—these are mutually exclusive cities.
 Quote: "The Eiffel Tower is located in Paris, France."
 
@@ -131,7 +117,7 @@ Context: "The company has grown significantly since its founding."
 OUTPUT:
 Verdict: INSUFFICIENT INFO
 Explanation: The context mentions the company's founding but doesn't specify who founded it.
-Quote: "The company has grown significantly since its founding."
+Quote: "There is no information about the company's founders in the context."
 """
         try:
             response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[

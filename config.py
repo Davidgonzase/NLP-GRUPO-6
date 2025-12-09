@@ -20,5 +20,5 @@ WIKI_TOPICS = [
     "Generative pre-trained transformer"
 ]
 
-CHUNK_SIZE = 200
-CHUNK_OVERLAP = 20  # 10% of 500
+CHUNK_SIZE = 150
+CHUNK_OVERLAP = 15  # 10% of 500
