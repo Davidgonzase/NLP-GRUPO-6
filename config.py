@@ -5,7 +5,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
 
 # Models
-EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL_NAME = "all-mpnet-base-v2"
 LLM_MODEL_NAME = "llama3"
 
 # Ingestion Settings
@@ -16,8 +16,9 @@ WIKI_TOPICS = [
     "Gemini",
     "Hallucination (artificial intelligence)",
     "BERT (language model)",
-    "Transformer (deep learning)"
+    "Transformer (deep learning)",
+    "Generative pre-trained transformer"
 ]
 
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 50  # 10% of 500
+CHUNK_SIZE = 200
+CHUNK_OVERLAP = 20  # 10% of 500

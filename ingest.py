@@ -21,7 +21,7 @@ def get_wikipedia_content(topic, lang="en"):
     
     return page.text, page.fullurl
 
-def chunk_text(text, chunk_size=500, overlap=50):
+def chunk_text(text, chunk_size=200, overlap=20):
     """
     Splits text into chunks with overlap.
     """
