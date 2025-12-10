@@ -30,7 +30,7 @@ class FactChecker:
         
         return documents, metadatas
 
-    def verify_claim(self, claim):
+    def verify_claim(self, claim, target_lang="auto"):
         """
         Verifies a claim using a Translation -> RAG -> Translation pipeline.
         """
@@ -128,10 +128,13 @@ Quote: "There is no information about the company's founders in the context."
         except Exception as e:
             return f"Error en LLM: {str(e)}", []
 
-        if detected_lang != 'en':
+        # Determine final language
+        final_lang = detected_lang if target_lang=="auto" else target_lang
+
+        if final_lang != 'en':
             try:
                 # Traducimos todo el bloque de respuesta
-                final_response = GoogleTranslator(source='en', target=detected_lang).translate(result_english)
+                final_response = GoogleTranslator(source='en', target=final_lang).translate(result_english)
             except Exception as e:
                 final_response = result_english + f"\n(Error traduciendo respuesta: {e})"
         else:

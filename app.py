@@ -25,6 +25,25 @@ def main():
     # Input
     query = st.text_area("✍️ Ingresa una afirmación para verificar:", height=100)
     
+    # Language Selection
+    language_options = {
+        "Auto (Same as input)": "auto",
+        "English": "en",
+        "Spanish": "es",
+        "French": "fr",
+        "Italian": "it",
+        "German": "de",
+        "Russian": "ru",
+        "Chinese": "zh-CN"
+    }
+    
+    selected_language_label = st.selectbox(
+        "🌐 Selecciona el idioma de respuesta:",
+        options=list(language_options.keys()),
+        index=0
+    )
+    target_lang = language_options[selected_language_label]
+    
     if st.button("Verificar Afirmación", type="primary"):
         if not query.strip():
             st.warning("Por favor ingresa un texto válido.")
@@ -32,7 +51,7 @@ def main():
             
         with st.spinner("⏳ Consultando base de conocimientos y analizando..."):
             checker = get_fact_checker()
-            verdict, sources = checker.verify_claim(query)
+            verdict, sources = checker.verify_claim(query, target_lang)
             
         # Display Verdict
         st.subheader("💡 Veredicto")
