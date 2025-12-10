@@ -9,7 +9,7 @@ EMBEDDING_MODEL_NAME = "all-mpnet-base-v2"
 LLM_MODEL_NAME = "llama3"
 
 # Ingestion Settings
-WIKI_LANG = "en"  # Wikipedia language (can be 'en' or 'es' depending on preference, defaulting to user language implication or 'en' if standard. User asked in Spanish, let's use 'es' if possible, or verify what they want. 'wikipedia-api' supports language code. The prompt requested 'Wikipedia' without specifying lang, but the user speaks Spanish. I will default to Spanish for content relevance.)
+WIKI_LANG = "en"  
 WIKI_TOPICS = [
     "Artificial Intelligence",
     "ChatGPT",
@@ -20,5 +20,5 @@ WIKI_TOPICS = [
     "Generative pre-trained transformer"
 ]
 
-CHUNK_SIZE = 150
-CHUNK_OVERLAP = 15  # 10% of 500
+CHUNK_SIZE = 150 
+CHUNK_OVERLAP = 15 
