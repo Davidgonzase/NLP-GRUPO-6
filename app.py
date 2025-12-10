@@ -51,10 +51,15 @@ def main():
             
         with st.spinner("⏳ Consultando base de conocimientos y analizando..."):
             checker = get_fact_checker()
-            verdict, sources = checker.verify_claim(query, target_lang)
+            verdict, confidence, sources = checker.verify_claim(query, target_lang)
             
         # Display Verdict
         st.subheader("💡 Veredicto")
+        
+        # Confidence Meter
+        st.write(f"**Confianza del Modelo:** {confidence}%")
+        st.progress(confidence / 100)
+        
         st.markdown(verdict)
         
         # Sources Expander

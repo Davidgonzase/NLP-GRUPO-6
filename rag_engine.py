@@ -54,7 +54,7 @@ class FactChecker:
         documents, metadatas = self.retrieve_context(claim_english)
         
         if not documents:
-            return "INFORMACIÓN INSUFICIENTE (No se encontraron documentos relevantes)", []
+            return "INFORMACIÓN INSUFICIENTE (No se encontraron documentos relevantes)", 0, []
 
         context_str = "\n\n".join(documents)
         print(context_str)
@@ -126,7 +126,53 @@ Quote: "There is no information about the company's founders in the context."
             result_english = response['message']['content']
             
         except Exception as e:
-            return f"Error en LLM: {str(e)}", []
+            return f"Error en LLM: {str(e)}", 0, []
+
+        # --- Secondary Prompt: Confidence Calculation ---
+        confidence_prompt = f"""
+You are evaluating how certain a fact-checking verdict is based on the evidence.
+
+CLAIM: "{claim_english}"
+EVIDENCE: "{context_str}"
+VERDICT: "{result_english}"
+
+Assign a confidence score (0-100) representing how strongly the evidence supports this specific verdict.
+
+HIGH CONFIDENCE (80-100):
+TRUE verdict: Evidence explicitly confirms the claim with specific facts, dates, figures, or authoritative sources. Direct match with no ambiguity.
+FALSE verdict: Evidence explicitly contradicts the claim with clear counter-evidence. The refutation is unambiguous.
+INSUFFICIENT INFO verdict: Evidence clearly lacks any relevant information about the claim. It's obvious the context doesn't address this topic at all.
+
+MODERATE CONFIDENCE (50-79):
+TRUE verdict: Evidence supports the claim but requires reasonable inference or context interpretation. Partial information that points toward truth.
+FALSE verdict: Evidence suggests the claim is false but doesn't completely refute it. Strong indicators of falsehood but with minor gaps.
+INSUFFICIENT INFO verdict: Evidence mentions related topics but doesn't directly address the specific claim. Unclear if information is truly absent or just not explicitly stated.
+
+LOW CONFIDENCE (20-49):
+TRUE verdict: Evidence only tangentially supports the claim. Requires significant assumptions or logical leaps.
+FALSE verdict: Evidence weakly contradicts the claim. Counter-evidence is vague or indirect.
+INSUFFICIENT INFO verdict: Evidence might contain relevant information but it's ambiguous or incomplete. Hard to determine if context truly lacks information.
+
+VERY LOW CONFIDENCE (0-19):
+Any verdict where the evidence-to-verdict connection is highly questionable, contradictory, or the reasoning is fundamentally flawed.
+
+Key principle: High confidence means you're CERTAIN about the verdict, not that the claim is true. You can be 95% confident that information is insufficient.
+
+You MUST output only a number between 0-100 representing your estimated confidence in the verdict. You MUST NOT output any additional text.
+        """
+        
+        try:
+            conf_response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
+                {'role': 'user', 'content': confidence_prompt},
+            ])
+            confidence_str = conf_response['message']['content'].strip()
+            # Extract number even if there is text
+            import re
+            match = re.search(r'\d+', confidence_str)
+            confidence_score = int(match.group()) if match else 0
+        except Exception:
+            confidence_score = 0
+
 
         # Determine final language
         final_lang = detected_lang if target_lang=="auto" else target_lang
@@ -140,4 +186,4 @@ Quote: "There is no information about the company's founders in the context."
         else:
             final_response = result_english
 
-        return final_response, metadatas
+        return final_response, confidence_score, metadatas
