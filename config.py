@@ -13,7 +13,7 @@ WIKI_LANG = "en"
 WIKI_TOPICS = [
     "Artificial Intelligence",
     "ChatGPT",
-    "Gemini",
+    "Gemini (language model)",
     "Hallucination (artificial intelligence)",
     "BERT (language model)",
     "Transformer (deep learning)",

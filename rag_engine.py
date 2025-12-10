@@ -3,7 +3,9 @@ from sentence_transformers import SentenceTransformer
 import ollama
 import config
 from langdetect import detect, LangDetectException
+import re
 from deep_translator import GoogleTranslator
+
 
 class FactChecker:
     def __init__(self):
@@ -58,7 +60,7 @@ class FactChecker:
 
         context_str = "\n\n".join(documents)
         print(context_str)
-        prompt = f"""You are a precise fact-checking system. Verify the claim using ONLY the provided context.
+        prompt = f"""You are an expert system that is specialized in classifying a given claim into one of the following three categories: TRUE,FALSE or INSUFFICIENT INFORMATION(used when the claim is not verifiable given the provided context). Verify the claim using ONLY the provided context.
 
 CONTEXT:
 {context_str}
@@ -68,62 +70,141 @@ CLAIM:
 
 FOLLOW THESE INSTRUCTIONS:
 1. VERDICT RULES:
-Define a veredict of TRUE when:
+Your first step is determine wheter the claim can be refuted or confirmed using the provided context.If the context does not contain relevant information about the claim, you MUST classify it as INSUFFICIENT INFORMATION.
+Here are some examples of claims and contexts that should be classified as INSUFFICIENT INFORMATION:
+EXAMPLE 1 - INSUFFICIENT INFORMATION(information in the context isn't enough to stablish a veredict):
+Context: "The city council approved a new zoning law to encourage mixed-use development downtown."
+Claim: "The new zoning law includes provisions for affordable housing"
+OUTPUT
+Verdict: INSUFFICIENT INFORMATION\n
+Explanation: The context does not provide any information about affordable housing provisions in the zoning law.
+
+EXAMPLE 2 - INSUFFICIENT INFORMATION(claim information is not present in the context):
+Context: "Dogs are known for their loyalty and companionship to humans."
+Claim: "The global conference focused on cybersecurity advancements took place in Berlin"
+OUTPUT
+Verdict: INSUFFICIENT INFORMATION\n
+Explanation: The context does not contain information about the conference's focus on cybersecurity.
+
+In your output you MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanationIn this scenario, your output format must be the following. :
+VERDICT: INSUFFICIENT INFO\n
+EXPLANATION: The context does not contain enough information to verify (user's claim)  
+
+If the context contains relevant information to verify or refute the claim, proceed to classify the claim as TRUE or FALSE based on the criteria below.
+Define a veredict of TRUE when when at least one of the following criteria is met:
 - Context explicitly confirms the claim's core assertion
 - Facts exposed in the context mathces the entities(names, numbers, relationships) or affirmationes stablished on the claim
-- Minor stylistic differences are acceptable (e.g., "CEO" vs "Chief Executive Officer")
+- Temporal statements in the claim aligns with the temporal statements in the context(dates, durations, sequences)
+- The context contains the same information expressed in the claim with different words. Some paraphrasing is acceptable as long as the core facts align.
 
-Define a veredict of FALSE when:
-- Context contradicts the claim with different facts
-- Context explicitly states the opposite
-- **CRITICAL:** Do NOT use FALSE simply because there in no information about the claim in the context. You must point to a specific sentence that makes the claim **impossible** to be true.
+Define a veredict of FALSE when at least one of the following criteria is met:
+- Context contains explicit information that makes the claim invalid.
+- Context contains information that is mutually exclusive with the claim's assertion(X is of type A, but the claim states X is of type B).
+- If the context provides the "true" version of a fact that is incorrectly stated in the claim, it is FALSE.
+- Context contains temporal statements (dates, durations, or sequences) that prove the falsity of the claim(e.g., the claim states an event happened in october but the context says it happened in june).
 
-Define a veredict of INSUFFICIENT INFO when:
-- Context doesn't address the specific claim
-- Context is too vague or ambiguous
-- Subject mentioned but assertion not covered
-- Never infer beyond what's explicitly stated
+Here are some expamples to illustrate the criteria for classifying a claim as TRUE OR FALSE:
+Example 1 - TRUE (paraphrased information):
+Context: "The merger was finalized on March 15, bringing together two industry leaders."
+Claim: "The merger was completed in March"
+OUTPUT
+Verdict: TRUE\n
+Explanation: "Finalized on March 15" confirms the merger was completed in March, matching the claim's core assertion.
 
-2. QUOTE EXTRACTION CRITERIA:
-- The quote must be valuable for evidencing your decision
-- The quote must be extracted from the context
-- The quote must not include information that is not relevant for supporting the verdict
+Example 2 - TRUE (implied confirmation):
+Context: "After five years as VP of Sales, Martinez was promoted to the executive suite as Chief Revenue Officer."
+Claim: "Martinez is the Chief Revenue Officer"
+OUTPUT
+Verdict: TRUE\n
+Explanation: The context explicitly states Martinez was promoted to Chief Revenue Officer, confirming the claim.
 
-3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict, explanation and quote:
-Verdict: [TRUE | FALSE | INSUFFICIENT INFO]\n
-Explanation: [1-2 sentences comparing claim facts to context facts, highlighting matches or mismatches]\n
-Quote: "[Quote extracted from the context supporting your verdict]"
+Example 3 - FALSE:
+Context: "The company reported 450 employees across all locations."
+Claim: "The company has 380 employees"
+OUTPUT
+Verdict: FALSE\n
+Explanation: The context states 450 employees, which directly invalidates the claim of 380 employees.
 
-4. OUTPUT EXAMPLES:
-Example 1: TRUE:
-Claim: "BERT was introduced by Google in 2018."
-Context: "Google released BERT in 2018 as a breakthrough in NLP."
-OUTPUT:
-Verdict: TRUE
-Explanation: The context confirms BERT was released by Google in 2018, matching all key entities in the claim.
-Quote: "Google released BERT in 2018 as a breakthrough in NLP."
+Example 4 - FALSE (temporal contradiction):
+Context: "The policy was announced on May of 2020."
+Claim: "The policy was announced on September of 2020"
+OUTPUT
+Verdict: FALSE\n
+Explanation: The context explicitly states the policy was announced on May of 2020, not in September.
 
-Example 2 - FALSE:
-Claim: "The Eiffel Tower is in Berlin."
-Context: "The Eiffel Tower is located in Paris, France."
-OUTPUT:
-Verdict: FALSE
-Explanation: The claim states Berlin as the location, but the context explicitly states Paris—these are mutually exclusive cities.
-Quote: "The Eiffel Tower is located in Paris, France."
+Example 5 - FALSE (mutually exclusive information):
+Context: "The 'Summit' supercomputer is powered by IBM Power9 CPUs and NVIDIA V100 GPUs, designed specifically for AI workloads."
+Claim: "The Summit supercomputer runs on Intel Xeon processors"
+OUTPUT
+Verdict: FALSE\n
+Explanation: The context specifies IBM Power9 CPUs, which invalidates the claim that it runs on Intel Xeon processors.
 
-Example 3 - INSUFFICIENT INFO:
-Claim: "The company was founded by Sarah Chen."
-Context: "The company has grown significantly since its founding."
-OUTPUT:
-Verdict: INSUFFICIENT INFO
-Explanation: The context mentions the company's founding but doesn't specify who founded it.
-Quote: "There is no information about the company's founders in the context."
+3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanation:
+Verdict: [TRUE|FALSE]\n
+Explanation: [1-2 sentences comparing claim facts to context facts, highlighting matches or mismatches].
 """
         try:
             response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
                 {'role': 'user', 'content': prompt},
-            ])
-            result_english = response['message']['content']
+            ], options={'temperature': 0.0})
+            verdict_explanation = response['message']['content']
+
+            # --- Secondary Prompt: Quote Extraction ---
+            quote_prompt = f"""You are an expert on the task of quote extraction for supporting a verdict and explanation about a claim. 
+If the verdict is TRUE OR FALSE,EXTRACT A QUOTE from the context that supports the following verdict and explanation for the claim. IF the verdict is INSUFFICIENT INFORMATION, JUST STATE THAT THE CONTEXT DOES NOT CONTAIN INFORMATION ABOUT THE CLAIM.
+
+CONTEXT:
+{context_str}
+
+CLAIM:
+"{claim}"
+
+VERDICT AND EXPLANATION:
+{verdict_explanation}
+
+QUOTE EXTRACTION CRITERIA:
+- The quote must contain valuable information for evidencing your decision
+- The quote must be extracted from the context
+- The quote must not include information that is not relevant for supporting the verdict
+- If the verdict was INSUFFICIENT just state that the content of the context does not contain information about the claim
+
+EXAMPLES OF DESIRED QUOTE EXTRACTION:
+Example 1 - TRUE verdict:
+Context: "Apple Inc. announced its Q4 earnings, with CEO Tim Cook reporting revenue of $89.5 billion."
+Claim: "Tim Cook is the CEO of Apple"
+OUTPUT
+Quote: "Apple Inc. announced its Q4 earnings, with CEO Tim Cook reporting ..."
+
+Example 2 - FALSE verdict:
+Context: "John Smith resigned from his position as CFO in March 2023, and was replaced by Maria Garcia."
+Claim: "John Smith currently serves as CFO"
+OUTPUT
+Quote: "John Smith resigned from his position as CFO in March 2023, and was replaced by Maria Garcia."
+
+Example 3 - INSUFFICIENT INFORMATION verdict:
+Context: "The company launched three new products this quarter, focusing on sustainability."
+Claim: "The company's revenue increased by 15% this quarter"
+OUTPUT
+Quote: "The context does not contain information about revenue or percentage increases"
+
+3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the quote. Never include the previous claim or explanation in your output:
+Quote: "[Quote literally extracted from the context supporting your verdict]"
+"""
+            quote_response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
+                {'role': 'user', 'content': quote_prompt},
+            ], options={'temperature': 0.0})
+            quote_result = quote_response['message']['content']
+            
+            # Regex to clean quote result (handling variations and extra text)
+            quote_match = re.search(r'Quote:\s*["\']?(.*?)["\']?\s*$', quote_result, re.IGNORECASE | re.DOTALL)
+            if quote_match:
+                # If match found, use the extracted content formatted cleanly
+                quote_cleaned = quote_match.group(1).strip()
+                quote_result = f'Quote: "{quote_cleaned}"'
+            
+            print(quote_result)
+
+            result_english = f"{verdict_explanation}\n{quote_result}"
             
         except Exception as e:
             return f"Error en LLM: {str(e)}", 0, []
@@ -141,17 +222,17 @@ Assign a confidence score (0-100) representing how strongly the evidence support
 HIGH CONFIDENCE (80-100):
 TRUE verdict: Evidence explicitly confirms the claim with specific facts, dates, figures, or authoritative sources. Direct match with no ambiguity.
 FALSE verdict: Evidence explicitly contradicts the claim with clear counter-evidence. The refutation is unambiguous.
-INSUFFICIENT INFO verdict: Evidence clearly lacks any relevant information about the claim. It's obvious the context doesn't address this topic at all.
+INSUFFICIENT INFORMATION verdict: Evidence clearly lacks any relevant information about the claim. It's obvious the context doesn't address this topic at all.
 
 MODERATE CONFIDENCE (50-79):
 TRUE verdict: Evidence supports the claim but requires reasonable inference or context interpretation. Partial information that points toward truth.
 FALSE verdict: Evidence suggests the claim is false but doesn't completely refute it. Strong indicators of falsehood but with minor gaps.
-INSUFFICIENT INFO verdict: Evidence mentions related topics but doesn't directly address the specific claim. Unclear if information is truly absent or just not explicitly stated.
+INSUFFICIENT INFORMATION verdict: Evidence mentions related topics but doesn't directly address the specific claim. Unclear if information is truly absent or just not explicitly stated.
 
 LOW CONFIDENCE (20-49):
 TRUE verdict: Evidence only tangentially supports the claim. Requires significant assumptions or logical leaps.
 FALSE verdict: Evidence weakly contradicts the claim. Counter-evidence is vague or indirect.
-INSUFFICIENT INFO verdict: Evidence might contain relevant information but it's ambiguous or incomplete. Hard to determine if context truly lacks information.
+INSUFFICIENT INFORMATION verdict: Evidence might contain relevant information but it's ambiguous or incomplete. Hard to determine if context truly lacks information.
 
 VERY LOW CONFIDENCE (0-19):
 Any verdict where the evidence-to-verdict connection is highly questionable, contradictory, or the reasoning is fundamentally flawed.
@@ -159,15 +240,34 @@ Any verdict where the evidence-to-verdict connection is highly questionable, con
 Key principle: High confidence means you're CERTAIN about the verdict, not that the claim is true. You can be 95% confident that information is insufficient.
 
 You MUST output only a number between 0-100 representing your estimated confidence in the verdict. You MUST NOT output any additional text.
-        """
+
+OUTPUT EXAMPLES:
+
+Example 1 (HIGH CONFIDENCE - TRUE):
+Claim: "The Eiffel Tower was completed in 1889"
+Evidence: "The Eiffel Tower, built for the 1889 World's Fair in Paris, was completed on March 31, 1889."
+Verdict: TRUE
+Output: 95
+
+Example 2 (HIGH CONFIDENCE - FALSE):
+Claim: "The Great Wall of China is visible from the Moon with the naked eye"
+Evidence: "NASA astronauts have confirmed that the Great Wall of China is not visible from the Moon without aid. No human-made structures are visible from lunar distance with the naked eye."
+Verdict: FALSE
+Output: 98
+
+Example 3 (HIGH CONFIDENCE - INSUFFICIENT INFORMATION):
+Claim: "The mayor of Springfield announced a new recycling program in 2023"
+Evidence: "Springfield's economic development has focused on attracting tech companies. The downtown area has seen significant retail growth."
+Verdict: INSUFFICIENT INFORMATION
+Output: 92
+"""
         
         try:
             conf_response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
                 {'role': 'user', 'content': confidence_prompt},
-            ])
+            ], options={'temperature': 0.0})
             confidence_str = conf_response['message']['content'].strip()
             # Extract number even if there is text
-            import re
             match = re.search(r'\d+', confidence_str)
             confidence_score = int(match.group()) if match else 0
         except Exception:
