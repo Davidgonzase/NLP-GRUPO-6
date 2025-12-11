@@ -1,6 +1,7 @@
 import chromadb
 from sentence_transformers import SentenceTransformer
 import ollama
+from ollama import Client
 import config
 from langdetect import detect, LangDetectException
 import re
@@ -15,6 +16,12 @@ class FactChecker:
         
         # Initialize Embedding Model
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
+        
+        # Initialize Ollama Client
+        self.llm_client = Client(
+            host='esto_no_existe',
+            headers={'X-API-KEY': 'api_key_123'} 
+        )
         
     def retrieve_context(self, query, n_results=6):
         """
@@ -60,13 +67,7 @@ class FactChecker:
 
         context_str = "\n\n".join(documents)
         print(context_str)
-        prompt = f"""You are an expert system that is specialized in classifying a given claim into one of the following three categories: TRUE,FALSE or INSUFFICIENT INFORMATION(used when the claim is not verifiable given the provided context). Verify the claim using ONLY the provided context.
-
-CONTEXT:
-{context_str}
-
-CLAIM:
-"{claim}"
+        system_prompt = """You are an expert system that is specialized in classifying a given claim into one of the following three categories: TRUE,FALSE or INSUFFICIENT INFORMATION(used when the claim is not verifiable given the provided context). Verify the claim using ONLY the provided context.
 
 FOLLOW THESE INSTRUCTIONS:
 1. VERDICT RULES:
@@ -86,7 +87,7 @@ OUTPUT
 Verdict: INSUFFICIENT INFORMATION\n
 Explanation: The context does not contain information about the conference's focus on cybersecurity.
 
-In your output you MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanationIn this scenario, your output format must be the following. :
+In your output you MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanation. In this scenario, your output format must be the following. :
 VERDICT: INSUFFICIENT INFO\n
 EXPLANATION: The context does not contain enough information to verify (user's claim)  
 
@@ -141,32 +142,35 @@ Explanation: The context specifies IBM Power9 CPUs, which invalidates the claim 
 
 3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanation:
 Verdict: [TRUE|FALSE]\n
-Explanation: [1-2 sentences comparing claim facts to context facts, highlighting matches or mismatches].
+Explanation: [Brief explanation comparing claim facts to context facts, highlighting matches or mismatches].
 """
-        try:
-            response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
-                {'role': 'user', 'content': prompt},
-            ], options={'temperature': 0.0})
-            verdict_explanation = response['message']['content']
-
-            # --- Secondary Prompt: Quote Extraction ---
-            quote_prompt = f"""You are an expert on the task of quote extraction for supporting a verdict and explanation about a claim. 
-If the verdict is TRUE OR FALSE,EXTRACT A QUOTE from the context that supports the following verdict and explanation for the claim. IF the verdict is INSUFFICIENT INFORMATION, JUST STATE THAT THE CONTEXT DOES NOT CONTAIN INFORMATION ABOUT THE CLAIM.
-
+        user_prompt = f"""
 CONTEXT:
 {context_str}
 
 CLAIM:
 "{claim}"
+"""
+        try:
+            response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ], options={'temperature': 0.0})
+            verdict_explanation = response['message']['content']
 
-VERDICT AND EXPLANATION:
-{verdict_explanation}
+            # --- Secondary Prompt: Quote Extraction ---
+            quote_system_prompt = """You are an expert on the task of quote extraction for supporting a verdict and explanation about a claim. 
+If the verdict is TRUE OR FALSE,EXTRACT A QUOTE from the context that supports the following verdict and explanation for the claim. IF the verdict is INSUFFICIENT INFORMATION, JUST STATE THAT THE CONTEXT DOES NOT CONTAIN INFORMATION ABOUT THE CLAIM.
 
 QUOTE EXTRACTION CRITERIA:
 - The quote must contain valuable information for evidencing your decision
 - The quote must be extracted from the context
 - The quote must not include information that is not relevant for supporting the verdict
 - If the verdict was INSUFFICIENT just state that the content of the context does not contain information about the claim
+
+CONTEXT FIDELITY CONSTRAINT:
+- The quote must be extracted from the context literally, without any paraphrasing or modification.
+- It is forbidden to add information that is not present in the context into the quote.
 
 EXAMPLES OF DESIRED QUOTE EXTRACTION:
 Example 1 - TRUE verdict:
@@ -190,8 +194,19 @@ Quote: "The context does not contain information about revenue or percentage inc
 3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the quote. Never include the previous claim or explanation in your output:
 Quote: "[Quote literally extracted from the context supporting your verdict]"
 """
-            quote_response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
-                {'role': 'user', 'content': quote_prompt},
+            quote_user_prompt = f"""
+CONTEXT:
+{context_str}
+
+CLAIM:
+"{claim}"
+
+VERDICT AND EXPLANATION:
+{verdict_explanation}
+"""
+            quote_response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
+                {'role': 'system', 'content': quote_system_prompt},
+                {'role': 'user', 'content': quote_user_prompt},
             ], options={'temperature': 0.0})
             quote_result = quote_response['message']['content']
             
@@ -210,12 +225,8 @@ Quote: "[Quote literally extracted from the context supporting your verdict]"
             return f"Error en LLM: {str(e)}", 0, []
 
         # --- Secondary Prompt: Confidence Calculation ---
-        confidence_prompt = f"""
+        confidence_system_prompt = """
 You are evaluating how certain a fact-checking verdict is based on the evidence.
-
-CLAIM: "{claim_english}"
-EVIDENCE: "{context_str}"
-VERDICT: "{result_english}"
 
 Assign a confidence score (0-100) representing how strongly the evidence supports this specific verdict.
 
@@ -261,10 +272,16 @@ Evidence: "Springfield's economic development has focused on attracting tech com
 Verdict: INSUFFICIENT INFORMATION
 Output: 92
 """
+        confidence_user_prompt = f"""
+CLAIM: "{claim_english}"
+EVIDENCE: "{context_str}"
+VERDICT: "{result_english}"
+"""
         
         try:
-            conf_response = ollama.chat(model=config.LLM_MODEL_NAME, messages=[
-                {'role': 'user', 'content': confidence_prompt},
+            conf_response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
+                {'role': 'system', 'content': confidence_system_prompt},
+                {'role': 'user', 'content': confidence_user_prompt},
             ], options={'temperature': 0.0})
             confidence_str = conf_response['message']['content'].strip()
             # Extract number even if there is text

@@ -6,7 +6,7 @@ CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
 
 # Models
 EMBEDDING_MODEL_NAME = "all-mpnet-base-v2"
-LLM_MODEL_NAME = "llama3"
+LLM_MODEL_NAME = "llama3.1:8b"
 
 # Ingestion Settings
 WIKI_LANG = "en"  
