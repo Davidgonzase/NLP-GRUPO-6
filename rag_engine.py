@@ -81,7 +81,7 @@ class FactChecker:
         if detected_lang != 'en':
             try:
                 nllb_source = self.ISO_TO_NLLB.get(detected_lang, 'eng_Latn')
-                claim_english = self.translator(claim, src_lang=nllb_source, tgt_lang="eng_Latn")[0]['translation_text']
+                claim_english = self.translator(claim, src_lang=nllb_source, tgt_lang="eng_Latn", max_length=512)[0]['translation_text']
 
                 print(f"THIS IS THE CLAIM: {claim_english}")
                 
@@ -134,75 +134,75 @@ EXAMPLE 1 - INSUFFICIENT INFO (Topic missing):
 Context: "The city council approved a new zoning law to encourage mixed-use development."
 Claim: "The new zoning law includes provisions for affordable housing"
 OUTPUT:
-Verdict: INSUFFICIENT INFORMATION\n
+Verdict: Insufficient information
 Explanation: The context does not provide any information about affordable housing provisions.
 
 EXAMPLE 2 - INSUFFICIENT INFO (Universal Truth Trap - CRITICAL):
 Context: "The software update v2.0 fixed several bugs in the login module."
 Claim: "The sun rises in the east"
 OUTPUT:
-Verdict: INSUFFICIENT INFORMATION\n
+Verdict: Insufficient information
 Explanation: While factually true in the real world, the provided context does not mention the sun or its movement.
 
 EXAMPLE 3 - INSUFFICIENT INFO (Universal Falsehood Trap):
 Context: "John went to the grocery store to buy milk."
 Claim: "The moon is made of green cheese"
 OUTPUT:
-Verdict: INSUFFICIENT INFORMATION\n
+Verdict: Insufficient information
 Explanation: The context describes John's shopping trip and does not contain information to refute the composition of the moon.
 
 EXAMPLE 4 - INSUFFICIENT INFO (Relation not present):
 Context: "The calculations for the trajectory of the rocket are mathematically correct"
 Claim: "2+2=3"
 OUTPUT:
-Verdict: INSUFFICIENT INFORMATION\n
+Verdict: Insufficient information
 Explanation: The context mentions correct mathematic operations, but does not contain concrete information about concrete operations.
 
 ECAMPLE 4 - TRUE (paraphrased information):
 Context: "The merger was finalized on March 15, bringing together two industry leaders."
 Claim: "The merger was completed in March"
 OUTPUT
-Verdict: TRUE\n
+Verdict: True
 Explanation: "Finalized on March 15" confirms the merger was completed in March, matching the claim's core assertion.
 
 EXAMPLE 5 - TRUE (implied confirmation):
 Context: "After five years as VP of Sales, Martinez was promoted to the executive suite as Chief Revenue Officer."
 Claim: "Martinez is the Chief Revenue Officer"
 OUTPUT
-Verdict: TRUE\n
+Verdict: True
 Explanation: The context explicitly states Martinez was promoted to Chief Revenue Officer, confirming the claim.
 
 EXAMPLE 6 - FALSE:
 Context: "The company reported 450 employees across all locations."
 Claim: "The company has 380 employees"
 OUTPUT
-Verdict: FALSE\n
+Verdict: False
 Explanation: The context states 450 employees, which directly invalidates the claim of 380 employees.
 
 EXAMPLE 7 - FALSE (temporal contradiction):
 Context: "The policy was announced on May of 2020."
 Claim: "The policy was announced on September of 2020"
 OUTPUT
-Verdict: FALSE\n
+Verdict: False
 Explanation: The context explicitly states the policy was announced on May of 2020, not in September.
 
 EXAMPLE 8 - FALSE (mutually exclusive information):
 Context: "The 'Summit' supercomputer is powered by IBM Power9 CPUs and NVIDIA V100 GPUs, designed specifically for AI workloads."
 Claim: "The Summit supercomputer runs on Intel Xeon processors"
 OUTPUT
-Verdict: FALSE\n
+Verdict: False
 Explanation: The context specifies IBM Power9 CPUs, which invalidates the claim that it runs on Intel Xeon processors.
 
 EXAMPLE 9 - FALSE (falsity inferred):
 Context: A phone can be used to open applications.
 Claim: Instagram, an application, cannot be used by a phone.
 OUTPUT
-Verdict: FALSE\n
+Verdict: False
 Explanation: The context specifies that phones can open applications, which contradicts the claim that Instagram cannot be used by a phone.
 
 3. OUTPUT FORMAT:
 You must strictly follow this format. Do not include internal reasoning or preamble.
-Verdict: [TRUE|FALSE|INSUFFICIENT INFORMATION]\n
+Verdict: [True|False|Insufficient information]
 Explanation: [Brief justification based ONLY on the text]\n
 """
         user_prompt = f"""
@@ -280,9 +280,35 @@ VERDICT AND EXPLANATION:
             
             print(quote_result)
 
-            result_english = f"{verdict_explanation}\n{quote_result}"
+            result_english_inter = f"{verdict_explanation}\n{quote_result}"
+
+            print(f"RESULT INTER: {result_english_inter}")
             
         except Exception as e:
+            return f"Error en LLM: {str(e)}", 0, []
+
+        summary_system_prompt = """You are an expert on the task of making summaries about a set of paragraphs. 
+This set of paragraphs is the EVIDENCE given. The summary MUST have between 40 and 100 words.
+
+OUTPUT FORMAT. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the summary . Never include the previous claim or explanation in your output.
+"""
+
+        summary_user_prompt = f"""
+EVIDENCE: "{context_str}"
+"""
+        
+        try:
+            summary_response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
+                {'role': 'system', 'content': summary_system_prompt},
+                {'role': 'user', 'content': summary_user_prompt},
+            ], options={'temperature': 0.2})
+            summary_str = summary_response['message']['content'].strip()
+            summary_str = f"Summary: {summary_str}"
+
+            result_english = f"{result_english_inter}\n{summary_str}"
+
+            print(f"RESULT ENG: {result_english}")
+        except Exception:
             return f"Error en LLM: {str(e)}", 0, []
 
         # --- Secondary Prompt: Confidence Calculation ---
@@ -318,19 +344,19 @@ OUTPUT EXAMPLES:
 Example 1 (HIGH CONFIDENCE - TRUE):
 Claim: "The Eiffel Tower was completed in 1889"
 Evidence: "The Eiffel Tower, built for the 1889 World's Fair in Paris, was completed on March 31, 1889."
-Verdict: TRUE
+Verdict: True
 Output: 95
 
 Example 2 (HIGH CONFIDENCE - FALSE):
 Claim: "The Great Wall of China is visible from the Moon with the naked eye"
 Evidence: "NASA astronauts have confirmed that the Great Wall of China is not visible from the Moon without aid. No human-made structures are visible from lunar distance with the naked eye."
-Verdict: FALSE
+Verdict: False
 Output: 98
 
 Example 3 (HIGH CONFIDENCE - INSUFFICIENT INFORMATION):
 Claim: "The mayor of Springfield announced a new recycling program in 2023"
 Evidence: "Springfield's economic development has focused on attracting tech companies. The downtown area has seen significant retail growth."
-Verdict: INSUFFICIENT INFORMATION
+Verdict: Insufficient information
 Output: 92
 """
         confidence_user_prompt = f"""
@@ -359,7 +385,12 @@ VERDICT: "{result_english}"
             try:
                 # Traducimos todo el bloque de respuesta
                 nllb_dest = self.ISO_TO_NLLB.get(final_lang, 'eng_Latn')
-                final_response = self.translator(result_english, src_lang='eng_Latn', tgt_lang=nllb_dest)[0]['translation_text']
+
+                final_verdict_explanation = self.translator(verdict_explanation, src_lang='eng_Latn', tgt_lang=nllb_dest, max_length=512)[0]['translation_text']
+                final_quote_result = self.translator(quote_result, src_lang='eng_Latn', tgt_lang=nllb_dest, max_length=512)[0]['translation_text']
+                final_summary_str = self.translator(summary_str, src_lang='eng_Latn', tgt_lang=nllb_dest, max_length=512)[0]['translation_text']
+
+                final_response = f"{final_verdict_explanation}\n{final_quote_result}\n{final_summary_str}"
 
                 print(f"THIS IS THE ANSWER: {final_response}")
                 
