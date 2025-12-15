@@ -6,9 +6,29 @@ import config
 from langdetect import detect, LangDetectException
 import re
 from deep_translator import GoogleTranslator
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 
 
 class FactChecker:
+
+    ISO_TO_NLLB = {
+        'es': 'spa_Latn',
+        'en': 'eng_Latn',
+        'fr': 'fra_Latn',
+        'it': 'ita_Latn',
+        'de': 'deu_Latn',
+        'pt': 'por_Latn',
+        'ru': 'rus_Cyrl',
+        'zh': 'zho_Hans',
+        'zh-CN': 'zho_Hans',
+        'ja': 'jpn_Jpan',
+        'nl': 'nld_Latn',
+        'pl': 'pol_Latn',
+        'ar': 'arb_Arab',
+        'tr': 'tur_Latn',
+        'ko': 'kor_Hang'
+    }
+
     def __init__(self):
         # Initialize ChromaDB
         self.client = chromadb.PersistentClient(path=config.CHROMA_DB_DIR)
@@ -19,9 +39,16 @@ class FactChecker:
         
         # Initialize Ollama Client
         self.llm_client = Client(
-            host='esto_no_existe',
-            headers={'X-API-KEY': 'api_key_123'} 
+            host='https://yiyuan.tsc.uc3m.es/',
+            headers={'X-API-KEY': 'sk-af55e7023913527f0d96c038eec2ef2d'}
         )
+
+        model_name = "facebook/nllb-200-distilled-600M"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        self.translator = pipeline("translation", model=model, tokenizer=tokenizer)
+
+        self.detector = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
         
     def retrieve_context(self, query, n_results=6):
         """
@@ -44,7 +71,7 @@ class FactChecker:
         Verifies a claim using a Translation -> RAG -> Translation pipeline.
         """
         try:
-            detected_lang = detect(claim)
+            detected_lang = self.detector(claim)[0]['label']
         except LangDetectException:
             detected_lang = 'en'
             
@@ -53,7 +80,11 @@ class FactChecker:
         # Si no es inglés, traducimos la consulta para el sistema
         if detected_lang != 'en':
             try:
-                claim_english = GoogleTranslator(source=detected_lang, target='en').translate(claim)
+                nllb_source = self.ISO_TO_NLLB.get(detected_lang, 'eng_Latn')
+                claim_english = self.translator(claim, src_lang=nllb_source, tgt_lang="eng_Latn")[0]['translation_text']
+
+                print(f"THIS IS THE CLAIM: {claim_english}")
+                
             except Exception as e:
                 print(f"⚠️ Error traduciendo input: {e}")
                 claim_english = claim # Fallback
@@ -67,82 +98,112 @@ class FactChecker:
 
         context_str = "\n\n".join(documents)
         print(context_str)
-        system_prompt = """You are an expert system that is specialized in classifying a given claim into one of the following three categories: TRUE,FALSE or INSUFFICIENT INFORMATION(used when the claim is not verifiable given the provided context). Verify the claim using ONLY the provided context.
+        system_prompt = """You are an expert system specialized in verifying claims using ONLY provided textual evidence. You must classify a given claim into one of three categories: TRUE, FALSE, or INSUFFICIENT INFORMATION.
 
-FOLLOW THESE INSTRUCTIONS:
+*** CRITICAL INSTRUCTION ***
+You must act as if you have NO prior knowledge of the world. You must ignore all facts, history, science, or common knowledge that is not explicitly written in the provided CONTEXT. 
+- Even if a claim is a universally known fact (e.g., "The Earth is round"), if it is not mentioned in the CONTEXT, you MUST classify it as INSUFFICIENT INFORMATION.
+- Even if a claim is physically impossible or universally false (e.g., "Humans can fly"), if the CONTEXT does not contradict it, you MUST classify it as INSUFFICIENT INFORMATION.
+
 1. VERDICT RULES:
-Your first step is determine wheter the claim can be refuted or confirmed using the provided context.If the context does not contain relevant information about the claim, you MUST classify it as INSUFFICIENT INFORMATION.
-Here are some examples of claims and contexts that should be classified as INSUFFICIENT INFORMATION:
-EXAMPLE 1 - INSUFFICIENT INFORMATION(information in the context isn't enough to stablish a veredict):
-Context: "The city council approved a new zoning law to encourage mixed-use development downtown."
+
+Determine the verdict based strictly on the following logic:
+
+VERDICT: INSUFFICIENT INFORMATION
+Use this when the context does not contain the necessary information to prove or disprove the claim.
+- If the claim is about a topic not mentioned in the context.
+- If the claim relies on external knowledge (common sense, geography, history) not present in the text.
+- If the claim relies on a relation with an element from the text but the relation is not in the text.
+
+VERDICT: TRUE
+Use this ONLY when the context provides explicit evidence supporting the claim.
+- The context explicitly states the information in the claim.
+- The context implies the claim through synonymous phrasing or logical consequence of the text provided.
+
+VERDICT: FALSE
+Use this ONLY when the context explicitly contradicts the claim.
+- The context contains information that is mutually exclusive to the claim.
+- The context contains information that makes the claim invalid directly or by inference.
+- The context contains information that contradicts the claim.
+- The context contains information with which the claim's falsity can be inferred.
+- The context provides a specific value/date/name that differs from the claim.
+
+2. EXAMPLES:
+
+EXAMPLE 1 - INSUFFICIENT INFO (Topic missing):
+Context: "The city council approved a new zoning law to encourage mixed-use development."
 Claim: "The new zoning law includes provisions for affordable housing"
-OUTPUT
+OUTPUT:
 Verdict: INSUFFICIENT INFORMATION\n
-Explanation: The context does not provide any information about affordable housing provisions in the zoning law.
+Explanation: The context does not provide any information about affordable housing provisions.
 
-EXAMPLE 2 - INSUFFICIENT INFORMATION(claim information is not present in the context):
-Context: "Dogs are known for their loyalty and companionship to humans."
-Claim: "The global conference focused on cybersecurity advancements took place in Berlin"
-OUTPUT
+EXAMPLE 2 - INSUFFICIENT INFO (Universal Truth Trap - CRITICAL):
+Context: "The software update v2.0 fixed several bugs in the login module."
+Claim: "The sun rises in the east"
+OUTPUT:
 Verdict: INSUFFICIENT INFORMATION\n
-Explanation: The context does not contain information about the conference's focus on cybersecurity.
+Explanation: While factually true in the real world, the provided context does not mention the sun or its movement.
 
-In your output you MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanation. In this scenario, your output format must be the following. :
-VERDICT: INSUFFICIENT INFO\n
-EXPLANATION: The context does not contain enough information to verify (user's claim)  
+EXAMPLE 3 - INSUFFICIENT INFO (Universal Falsehood Trap):
+Context: "John went to the grocery store to buy milk."
+Claim: "The moon is made of green cheese"
+OUTPUT:
+Verdict: INSUFFICIENT INFORMATION\n
+Explanation: The context describes John's shopping trip and does not contain information to refute the composition of the moon.
 
-If the context contains relevant information to verify or refute the claim, proceed to classify the claim as TRUE or FALSE based on the criteria below.
-Define a veredict of TRUE when when at least one of the following criteria is met:
-- Context explicitly confirms the claim's core assertion
-- Facts exposed in the context mathces the entities(names, numbers, relationships) or affirmationes stablished on the claim
-- Temporal statements in the claim aligns with the temporal statements in the context(dates, durations, sequences)
-- The context contains the same information expressed in the claim with different words. Some paraphrasing is acceptable as long as the core facts align.
+EXAMPLE 4 - INSUFFICIENT INFO (Relation not present):
+Context: "The calculations for the trajectory of the rocket are mathematically correct"
+Claim: "2+2=3"
+OUTPUT:
+Verdict: INSUFFICIENT INFORMATION\n
+Explanation: The context mentions correct mathematic operations, but does not contain concrete information about concrete operations.
 
-Define a veredict of FALSE when at least one of the following criteria is met:
-- Context contains explicit information that makes the claim invalid.
-- Context contains information that is mutually exclusive with the claim's assertion(X is of type A, but the claim states X is of type B).
-- If the context provides the "true" version of a fact that is incorrectly stated in the claim, it is FALSE.
-- Context contains temporal statements (dates, durations, or sequences) that prove the falsity of the claim(e.g., the claim states an event happened in october but the context says it happened in june).
-
-Here are some expamples to illustrate the criteria for classifying a claim as TRUE OR FALSE:
-Example 1 - TRUE (paraphrased information):
+ECAMPLE 4 - TRUE (paraphrased information):
 Context: "The merger was finalized on March 15, bringing together two industry leaders."
 Claim: "The merger was completed in March"
 OUTPUT
 Verdict: TRUE\n
 Explanation: "Finalized on March 15" confirms the merger was completed in March, matching the claim's core assertion.
 
-Example 2 - TRUE (implied confirmation):
+EXAMPLE 5 - TRUE (implied confirmation):
 Context: "After five years as VP of Sales, Martinez was promoted to the executive suite as Chief Revenue Officer."
 Claim: "Martinez is the Chief Revenue Officer"
 OUTPUT
 Verdict: TRUE\n
 Explanation: The context explicitly states Martinez was promoted to Chief Revenue Officer, confirming the claim.
 
-Example 3 - FALSE:
+EXAMPLE 6 - FALSE:
 Context: "The company reported 450 employees across all locations."
 Claim: "The company has 380 employees"
 OUTPUT
 Verdict: FALSE\n
 Explanation: The context states 450 employees, which directly invalidates the claim of 380 employees.
 
-Example 4 - FALSE (temporal contradiction):
+EXAMPLE 7 - FALSE (temporal contradiction):
 Context: "The policy was announced on May of 2020."
 Claim: "The policy was announced on September of 2020"
 OUTPUT
 Verdict: FALSE\n
 Explanation: The context explicitly states the policy was announced on May of 2020, not in September.
 
-Example 5 - FALSE (mutually exclusive information):
+EXAMPLE 8 - FALSE (mutually exclusive information):
 Context: "The 'Summit' supercomputer is powered by IBM Power9 CPUs and NVIDIA V100 GPUs, designed specifically for AI workloads."
 Claim: "The Summit supercomputer runs on Intel Xeon processors"
 OUTPUT
 Verdict: FALSE\n
 Explanation: The context specifies IBM Power9 CPUs, which invalidates the claim that it runs on Intel Xeon processors.
 
-3. OUTPUT FORMAT. You MUST follow the following format in your output. You MUST NOT include reasoning, chain of thoughts, explanations, etc. just limit yourself to return the verdict and explanation:
-Verdict: [TRUE|FALSE]\n
-Explanation: [Brief explanation comparing claim facts to context facts, highlighting matches or mismatches].
+EXAMPLE 9 - FALSE (falsity inferred):
+Context: A phone can be used to open applications.
+Claim: Instagram, an application, cannot be used by a phone.
+OUTPUT
+Verdict: FALSE\n
+Explanation: The context specifies that phones can open applications, which contradicts the claim that Instagram cannot be used by a phone.
+
+3. OUTPUT FORMAT:
+You must strictly follow this format. Do not include internal reasoning or preamble.
+Verdict: [TRUE|FALSE|INSUFFICIENT INFORMATION]\n
+Explanation: [Brief justification based ONLY on the text]\n
 """
         user_prompt = f"""
 CONTEXT:
@@ -297,7 +358,11 @@ VERDICT: "{result_english}"
         if final_lang != 'en':
             try:
                 # Traducimos todo el bloque de respuesta
-                final_response = GoogleTranslator(source='en', target=final_lang).translate(result_english)
+                nllb_dest = self.ISO_TO_NLLB.get(final_lang, 'eng_Latn')
+                final_response = self.translator(result_english, src_lang='eng_Latn', tgt_lang=nllb_dest)[0]['translation_text']
+
+                print(f"THIS IS THE ANSWER: {final_response}")
+                
             except Exception as e:
                 final_response = result_english + f"\n(Error traduciendo respuesta: {e})"
         else:
