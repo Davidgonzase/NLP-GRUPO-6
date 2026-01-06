@@ -34,7 +34,7 @@ def system_eval(frases_csv):
             "pred": pred,
             "confidence": confidence
         })
-        # Pequeño sleep para no saturar el servidor si es externo
+        # Pequeño sleep para no saturar el servidor de la universidad
         time.sleep(0.5)
 
     # Crear DataFrame de resultados
@@ -46,7 +46,7 @@ def system_eval(frases_csv):
     print("="*30)
     print(classification_report(df_res['esperado'], df_res['pred']))
     
-    # Guardar para tu memoria del proyecto
+    # Guardado resultados a CSV
     df_res.to_csv("resultados_finales.csv", index=False)
     print(" Resultados guardados en 'resultados_finales.csv'")
 
