@@ -1,14 +1,22 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Claves y Host en caso de no ser haber sido definidas, porfavor, defínalas en el archivo .env
+OLLAMA_HOST = os.getenv("OLLAMA_HOST")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
+WIKI_USER_AGENT = os.getenv("WIKI_USER_AGENT")
+
+# Modelos
+EMBEDDING_MODEL_NAME = "all-mpnet-base-v2"
+LLM_MODEL_NAME = "llama3.1:8b"
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
 
-# Models
-EMBEDDING_MODEL_NAME = "all-mpnet-base-v2"
-LLM_MODEL_NAME = "llama3.1:8b"
-
-# Ingestion Settings
+# Ajustes de modelo de embeddings
 WIKI_LANG = "en"  
 WIKI_TOPICS = [
     "Artificial Intelligence",

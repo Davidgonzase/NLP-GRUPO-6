@@ -5,12 +5,11 @@ from ollama import Client
 import config
 from langdetect import detect, LangDetectException
 import re
-from deep_translator import GoogleTranslator
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 
-
+# Clase principal de verificación de hechos
 class FactChecker:
-
+    # Mapeo de códigos de idioma ISO a NLLB
     ISO_TO_NLLB = {
         'es': 'spa_Latn',
         'en': 'eng_Latn',
@@ -30,30 +29,26 @@ class FactChecker:
     }
 
     def __init__(self):
-        # Initialize ChromaDB
+        # Inicializacion de ChromaDB, modelo de embeddings, LLM y traductor
         self.client = chromadb.PersistentClient(path=config.CHROMA_DB_DIR)
         self.collection = self.client.get_collection(name="fact_checking_knowledge_base")
-        
-        # Initialize Embedding Model
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
-        
-        # Initialize Ollama Client
         self.llm_client = Client(
-            host='https://yiyuan.tsc.uc3m.es/',
-            headers={'X-API-KEY': 'sk-af55e7023913527f0d96c038eec2ef2d'}
+            host=config.OLLAMA_HOST,
+            headers={'X-API-KEY': config.OLLAMA_API_KEY}
         )
-
+        
+        # Iniciado del modelo de traducción NLLB usado para traducciones
         model_name = "facebook/nllb-200-distilled-600M"
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
         self.translator = pipeline("translation", model=model, tokenizer=tokenizer)
 
+        # Detector de idioma usando xlm-roberta-base-language-detection
         self.detector = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
-        
+    
+    # Recuperación de contexto relevante desde ChromaDB
     def retrieve_context(self, query, n_results=6):
-        """
-        Retrieves relevant documents from ChromaDB.
-        """
         query_embedding = self.embedding_model.encode([query]).tolist()
         
         results = self.collection.query(
@@ -66,16 +61,15 @@ class FactChecker:
         
         return documents, metadatas
 
+    # Verificación de afirmaciones usando pipeline Traducción -> RAG -> Traducción
     def verify_claim(self, claim, target_lang="auto"):
-        """
-        Verifies a claim using a Translation -> RAG -> Translation pipeline.
-        """
+        # Detección de idioma del input
         try:
             detected_lang = self.detector(claim)[0]['label']
         except LangDetectException:
             detected_lang = 'en'
             
-        print(f"🌍 Idioma detectado: {detected_lang}")
+        print(f"Idioma detectado: {detected_lang}")
 
         # Si no es inglés, traducimos la consulta para el sistema
         if detected_lang != 'en':
@@ -83,21 +77,28 @@ class FactChecker:
                 nllb_source = self.ISO_TO_NLLB.get(detected_lang, 'eng_Latn')
                 claim_english = self.translator(claim, src_lang=nllb_source, tgt_lang="eng_Latn", max_length=512)[0]['translation_text']
 
-                print(f"THIS IS THE CLAIM: {claim_english}")
+                print(f"Traducción al inglés: {claim_english}")
                 
             except Exception as e:
-                print(f"⚠️ Error traduciendo input: {e}")
+                print(f"Error traduciendo input: {e}")
                 claim_english = claim # Fallback
         else:
             claim_english = claim
 
+        # Recuperación de contexto relevante en base al texto original o traducido en inglés
         documents, metadatas = self.retrieve_context(claim_english)
         
+        # En caso de que la afirmación no se encuentre en la base de conocimiento informamos en la APP
         if not documents:
             return "INFORMACIÓN INSUFICIENTE (No se encontraron documentos relevantes)", 0, []
 
+        # Construcción del prompt para el LLM
         context_str = "\n\n".join(documents)
         print(context_str)
+        # En este prompt se incluyen reglas estrictas para la verificación de hechos, junto con ejemplos detallados y el formato de salida esperado
+        # Su propósito es guiar al modelo para que evalúe la veracidad de una afirmación basándose únicamente en el contexto proporcionado y que devuelva un veredicto False, True o Insufficient Information
+        # Para ello hemos indicado al modelo que debe actuar como si no tuviera conocimiento previo del mundo, basándose únicamente en el contexto proporcionado
+        # Esto es crucial para evitar que el modelo utilice "conocimiento general" que no esté presente en el contexto recuperado y que se adapte a las reglas y ejemplos dados
         system_prompt = """You are an expert system specialized in verifying claims using ONLY provided textual evidence. You must classify a given claim into one of three categories: TRUE, FALSE, or INSUFFICIENT INFORMATION.
 
 *** CRITICAL INSTRUCTION ***
@@ -212,6 +213,7 @@ CONTEXT:
 CLAIM:
 "{claim}"
 """
+        # LLamada al LLM para obtener veredicto y explicación
         try:
             response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
                 {'role': 'system', 'content': system_prompt},
@@ -219,7 +221,9 @@ CLAIM:
             ], options={'temperature': 0.0})
             verdict_explanation = response['message']['content']
 
-            # --- Secondary Prompt: Quote Extraction ---
+            # Segunda llamada al LLM para extracción de cita relevante
+            # Al igual que antes, se incluyen instrucciones detalladas y ejemplos para guiar al modelo
+            # Su propósito es obterner una cita textual del contexto que respalde el veredicto dado 
             quote_system_prompt = """You are an expert on the task of quote extraction for supporting a verdict and explanation about a claim. 
 If the verdict is TRUE OR FALSE,EXTRACT A QUOTE from the context that supports the following verdict and explanation for the claim. IF the verdict is INSUFFICIENT INFORMATION, JUST STATE THAT THE CONTEXT DOES NOT CONTAIN INFORMATION ABOUT THE CLAIM.
 
@@ -265,28 +269,30 @@ CLAIM:
 VERDICT AND EXPLANATION:
 {verdict_explanation}
 """
+            # Segunda llamada al LLM para extracción de cita relevante
             quote_response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
                 {'role': 'system', 'content': quote_system_prompt},
                 {'role': 'user', 'content': quote_user_prompt},
             ], options={'temperature': 0.0})
             quote_result = quote_response['message']['content']
             
-            # Regex to clean quote result (handling variations and extra text)
+            # Limpieza del resultado para asegurar formato correcto
             quote_match = re.search(r'Quote:\s*["\']?(.*?)["\']?\s*$', quote_result, re.IGNORECASE | re.DOTALL)
             if quote_match:
-                # If match found, use the extracted content formatted cleanly
+                # En caso de encontrar el formato correcto, extraemos la cita
                 quote_cleaned = quote_match.group(1).strip()
                 quote_result = f'Quote: "{quote_cleaned}"'
             
             print(quote_result)
-
             result_english_inter = f"{verdict_explanation}\n{quote_result}"
-
             print(f"RESULT INTER: {result_english_inter}")
             
         except Exception as e:
             return f"Error en LLM: {str(e)}", 0, []
 
+        # Tercer LLM Prompt: Resumen de la evidencia
+        # Este prompt tiene como objetivo generar un resumen conciso de la evidencia presentada en el contexto
+        # El resumen ayuda a sintetizar la información clave que respalda el veredicto, facilitando su comprensión
         summary_system_prompt = """You are an expert on the task of making summaries about a set of paragraphs. 
 This set of paragraphs is the EVIDENCE given. The summary MUST have between 40 and 100 words.
 
@@ -296,7 +302,7 @@ OUTPUT FORMAT. You MUST NOT include reasoning, chain of thoughts, explanations, 
         summary_user_prompt = f"""
 EVIDENCE: "{context_str}"
 """
-        
+        # Tercera llamada al LLM para resumen de evidencia
         try:
             summary_response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
                 {'role': 'system', 'content': summary_system_prompt},
@@ -311,7 +317,9 @@ EVIDENCE: "{context_str}"
         except Exception:
             return f"Error en LLM: {str(e)}", 0, []
 
-        # --- Secondary Prompt: Confidence Calculation ---
+        # Cuarto LLM Prompt: Evaluación de confianza
+        # Este prompt está diseñado para que el modelo evalúe cuán confiable es el veredicto dado el contexto
+        # Se proporcionan criterios detallados para asignar una puntuación de confianza entre 0 y 100
         confidence_system_prompt = """
 You are evaluating how certain a fact-checking verdict is based on the evidence.
 
@@ -364,21 +372,21 @@ CLAIM: "{claim_english}"
 EVIDENCE: "{context_str}"
 VERDICT: "{result_english}"
 """
-        
+        # Cuarta y última llamada al LLM para evaluación de confianza
         try:
             conf_response = self.llm_client.chat(model=config.LLM_MODEL_NAME, messages=[
                 {'role': 'system', 'content': confidence_system_prompt},
                 {'role': 'user', 'content': confidence_user_prompt},
             ], options={'temperature': 0.0})
             confidence_str = conf_response['message']['content'].strip()
-            # Extract number even if there is text
+            # Extraemos el número incluso si hay texto adicional
             match = re.search(r'\d+', confidence_str)
             confidence_score = int(match.group()) if match else 0
         except Exception:
             confidence_score = 0
 
 
-        # Determine final language
+        # Determinamos el idioma final de la respuesta
         final_lang = detected_lang if target_lang=="auto" else target_lang
 
         if final_lang != 'en':
@@ -392,11 +400,12 @@ VERDICT: "{result_english}"
 
                 final_response = f"{final_verdict_explanation}\n{final_quote_result}\n{final_summary_str}"
 
-                print(f"THIS IS THE ANSWER: {final_response}")
+                print(f"ESTA ES LA RESPUESTA: {final_response}")
                 
             except Exception as e:
                 final_response = result_english + f"\n(Error traduciendo respuesta: {e})"
         else:
             final_response = result_english
 
+        # Devolvemos la respuesta final, la puntuación de confianza y los metadatos de las fuentes
         return final_response, confidence_score, metadatas

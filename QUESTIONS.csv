@@ -1,0 +1,101 @@
+claim,expected_verdict,language
+The Transformer architecture uses self-attention mechanisms to process data.,TRUE,en
+L'intelligence artificielle est une branche de l'informatique qui crée des systèmes intelligents.,TRUE,fr
+Los transistores actúan como interruptores o amplificadores en los circuitos electrónicos.,TRUE,es
+Deep learning is based on artificial neural networks with multiple layers.,TRUE,en
+"Die Kernfusion ist der Prozess, bei dem sich Atomkerne verbinden, um Energie freizusetzen.",TRUE,de
+Il sole è la stella situata al centro del nostro sistema solare.,TRUE,it
+L'oxygène possède le numéro atomique 8 dans le tableau périodique.,TRUE,fr
+"The Holocene is the current geological epoch that began 11,700 years ago.",TRUE,en
+La mecánica cuántica estudia la materia a escala atómica y subatómica.,TRUE,es
+Operating systems manage both computer hardware and software resources.,TRUE,en
+Cells are the basic structural units of all living organisms.,TRUE,en
+La neurociencia es el estudio científico del sistema nervioso.,TRUE,es
+Radiology uses medical imaging like X-rays to diagnose diseases.,TRUE,en
+The Milky Way is a galaxy containing billions of stars bound by gravity.,TRUE,en
+El ADN contiene las instrucciones genéticas usadas en el desarrollo de los seres vivos.,TRUE,es
+L'atome est composé d'un noyau contenant des protons et des neutrons.,TRUE,fr
+Machine Learning allows computers to improve from experience.,TRUE,en
+La chirurgie est une branche de la médecine qui traite les maladies par intervention manuelle.,TRUE,fr
+Computers process digital data in binary format using zeros and ones.,TRUE,en
+A random-access memory (RAM) is a form of computer data storage.,TRUE,en
+La prehistoria termina con la invención de los sistemas de escritura.,TRUE,es
+The Moon is the only natural satellite of the Earth.,TRUE,en
+Jupiter is the largest planet in our Solar System.,TRUE,en
+La bioquímica estudia los procesos químicos en los organismos vivos.,TRUE,es
+Software refers to a collection of data or computer instructions.,TRUE,en
+Ancient Greece is considered the cradle of Western civilization.,TRUE,en
+Los semiconductores tienen una conductividad entre los aislantes y los conductores.,TRUE,es
+L'eau est composée de deux atomes d'hydrogène et un d'oxygène.,TRUE,fr
+Stars are celestial bodies made of plasma held together by gravity.,TRUE,en
+Fire is the rapid oxidation of a material in the combustion process.,TRUE,en
+The Transformer architecture refuses to use any attention mechanisms.,FALSE,en
+L'intelligence artificielle est une branche de la cuisine traditionnelle.,FALSE,fr
+Los transistores fueron inventados por los antiguos romanos para enviar correos.,FALSE,es
+Deep learning is based on the study of ancient rocks and minerals.,FALSE,en
+Die Kernfusion findet ausschließlich in Gefrierschränken statt.,FALSE,de
+Il sole è un pianeta solido fatto di ghiaccio e situato vicino a Marte.,FALSE,it
+L'oxygène est un métal lourd qui ne se trouve pas dans l'air.,FALSE,fr
+The Holocene ended five million years ago before humans existed.,FALSE,en
+La mecánica cuántica afirma que los átomos no existen en absoluto.,FALSE,es
+Operating systems are physical parts of the computer you can eat.,FALSE,en
+Cells are the largest objects in the universe and can be seen from space.,FALSE,en
+La neurociencia es el estudio de cómo fabricar muebles de madera.,FALSE,es
+Radiology uses crystal balls and magic to predict the future.,FALSE,en
+The Milky Way is a small island located in the middle of the Pacific Ocean.,FALSE,en
+El ADN es una proteína que solo se encuentra en las piedras del río.,FALSE,es
+"L'atome est la particule la plus grande de la galaxie, visible à l'œil nu.",FALSE,fr
+Machine Learning means that computers grow biological brains with age.,FALSE,en
+La chirurgie est une technique pour réparer les pneus de bicyclette.,FALSE,fr
+Computers process data using steam and water pipes instead of electricity.,FALSE,en
+RAM memory is a permanent storage that never deletes information.,FALSE,en
+La prehistoria terminó cuando se inventó el primer iPhone en el año 2007.,FALSE,es
+The Moon is a star that provides heat to the entire Solar System.,FALSE,en
+"Jupiter is the smallest planet in the universe, smaller than an atom.",FALSE,en
+La bioquímica es el estudio de cómo los fantasmas atraviesan paredes.,FALSE,es
+Software is a tool used exclusively for gardening and planting trees.,FALSE,en
+Ancient Greece was a civilization located on the planet Mars.,FALSE,en
+Los semiconductores son materiales que no permiten el paso de la electricidad.,FALSE,es
+L'eau est composée d'or et d'argent pur.,FALSE,fr
+Stars are small plastic balls floating in the Earth's atmosphere.,FALSE,en
+Fire is a cold process that turns water into solid ice.,FALSE,en
+Who will win the Super Bowl in February 2026?,INSUFFICIENT INFORMATION,en
+¿Cuál es el nombre de la madre del primer programador de Python?,INSUFFICIENT INFORMATION,es
+What is the current temperature of the water in the Nile River?,INSUFFICIENT INFORMATION,en
+¿Cuántas personas están comiendo pizza en Madrid ahora mismo?,INSUFFICIENT INFORMATION,es
+The secret ingredients of the most famous burger in my city.,INSUFFICIENT INFORMATION,en
+¿Cuál es la matrícula del coche oficial del presidente?,INSUFFICIENT INFORMATION,es
+How many birds are currently flying over the Eiffel Tower?,INSUFFICIENT INFORMATION,en
+¿Cuál será el número premiado de la lotería de Navidad este año?,INSUFFICIENT INFORMATION,es
+The exact number of stars in a galaxy discovered yesterday.,INSUFFICIENT INFORMATION,en
+¿Quién es el mejor jugador de ajedrez de mi barrio?,INSUFFICIENT INFORMATION,es
+The results of the tennis match happening in my local club now.,INSUFFICIENT INFORMATION,en
+¿Qué cenó el director de la universidad anoche?,INSUFFICIENT INFORMATION,es
+The exact weight of the largest rock on the planet Mars.,INSUFFICIENT INFORMATION,en
+¿Cuál es la contraseña del router de mi vecino?,INSUFFICIENT INFORMATION,es
+The total amount of money inside the Bank of Spain right now.,INSUFFICIENT INFORMATION,en
+¿Cuántas hojas tiene el árbol que está frente a mi casa?,INSUFFICIENT INFORMATION,es
+The personal phone number of the CEO of OpenAI.,INSUFFICIENT INFORMATION,en
+¿Cuál es el color de los calcetines que llevo puestos?,INSUFFICIENT INFORMATION,es
+The winner of the 2030 World Cup in Uruguay.,INSUFFICIENT INFORMATION,en
+¿Qué canción está escuchando mi hermano en este momento?,INSUFFICIENT INFORMATION,es
+What is the serial number of the dollar bill in my pocket?,INSUFFICIENT INFORMATION,en
+¿Cuál es la profundidad exacta de un charco en mi calle?,INSUFFICIENT INFORMATION,es
+The name of the cat belonging to the person who wrote this.,INSUFFICIENT INFORMATION,en
+¿Cuántos granos de arroz hay en un paquete de un kilo?,INSUFFICIENT INFORMATION,es
+The brand of the shoes worn by the first person to walk today.,INSUFFICIENT INFORMATION,en
+¿Quién ganó el torneo local de dominó en 1950?,INSUFFICIENT INFORMATION,es
+The current mood of a person living in Tokyo at this second.,INSUFFICIENT INFORMATION,en
+¿Cuál es el color favorito del próximo presidente de Francia?,INSUFFICIENT INFORMATION,es
+The exact time the first leaf will fall next autumn.,INSUFFICIENT INFORMATION,en
+¿Cuántos peces hay exactamente en el Mar Mediterráneo?,INSUFFICIENT INFORMATION,es
+The total number of windows in all the buildings of New York.,INSUFFICIENT INFORMATION,en
+¿Qué marca de champú usa el mejor científico del mundo?,INSUFFICIENT INFORMATION,es
+The result of a coin flip I am about to do.,INSUFFICIENT INFORMATION,en
+¿Cuántos pasos dará mi perro mañana por la mañana?,INSUFFICIENT INFORMATION,es
+The specific smell of the air in the center of the Sahara desert.,INSUFFICIENT INFORMATION,en
+¿Quién es la persona más alta de mi portal?,INSUFFICIENT INFORMATION,es
+The number of clouds currently over the Atlantic Ocean.,INSUFFICIENT INFORMATION,en
+¿Cuál es la primera palabra que dirá un bebé que nace ahora?,INSUFFICIENT INFORMATION,es
+The exact coordinates of a lost treasure in the Caribbean.,INSUFFICIENT INFORMATION,en
+¿Qué está pensando el profesor mientras corrige este trabajo?,INSUFFICIENT INFORMATION,es

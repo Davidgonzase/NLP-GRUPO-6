@@ -5,12 +5,10 @@ import wikipediaapi
 import config
 import tqdm
 
+# Funcion para obtener contenido de Wikipedia
 def get_wikipedia_content(topic, lang="en"):
-    """
-    Fetches the content of a Wikipedia page.
-    """
     wiki_wiki = wikipediaapi.Wikipedia(
-        user_agent='RAGFactChecker/1.0 (contact: jrodriguez4013@gmail.com)',
+        user_agent=config.WIKI_USER_AGENT, 
         language=lang
     )
     page = wiki_wiki.page(topic)
@@ -21,10 +19,8 @@ def get_wikipedia_content(topic, lang="en"):
     
     return page.text, page.fullurl
 
+# Division del texto en chunks
 def chunk_text(text, chunk_size=200, overlap=20):
-    """
-    Splits text into chunks with overlap.
-    """
     words = text.split()
     chunks = []
     
@@ -35,60 +31,51 @@ def chunk_text(text, chunk_size=200, overlap=20):
     return chunks
 
 def main():
-    print("🚀 Iniciando proceso de ingesta...")
+    print("Iniciando proceso de ingesta de datos...\n")
     
-    # Initialize ChromaDB
-    print(f"📂 Conectando a ChromaDB en: {config.CHROMA_DB_DIR}")
+    # Inicializacion de ChormaDB
     client = chromadb.PersistentClient(path=config.CHROMA_DB_DIR)
     
-    # Create or get collection
+    # Creacion de la coleccion y borrado si existe
     collection_name = "fact_checking_knowledge_base"
-    # Delete if exists to start fresh (optional, but good for idempotent runs in this demo)
     try:
         client.delete_collection(name=collection_name)
     except Exception:
         pass
-        
     collection = client.create_collection(name=collection_name)
     
-    # Initialize Embedding Model
-    print(f"🧠 Cargando modelo de embeddings: {config.EMBEDDING_MODEL_NAME}")
+    # Iniciado de modelo de embeddings
     embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
+    print(f"Modelo {config.EMBEDDING_MODEL_NAME} cargado\n")
     
-    # Process Topics
+    # Proceso de ingesta
     total_chunks = 0
-    
     for topic in tqdm.tqdm(config.WIKI_TOPICS, desc="Procesando temas"):
-        print(f"\n📥 Descargando: {topic}")
+        print(f"\nTema: {topic}")
         content, url = get_wikipedia_content(topic, lang=config.WIKI_LANG)
-        
         if not content:
             continue
-            
         chunks = chunk_text(content, chunk_size=config.CHUNK_SIZE, overlap=config.CHUNK_OVERLAP)
-        
         if not chunks:
             continue
-            
-        print(f"   ✂️ Generando {len(chunks)} chunks...")
         
-        # Generate Embeddings
+        print(f"{len(chunks)} chunks generados")
+        
+        # Generar embeddings y agregar a ChromaDB
         embeddings = embedding_model.encode(chunks)
-        
-        # Prepare data for Chroma
         ids = [f"{topic}_{i}" for i in range(len(chunks))]
         metadatas = [{"source": url, "topic": topic, "chunk_id": i} for i in range(len(chunks))]
         
-        # Add to collection
         collection.add(
             documents=chunks,
             embeddings=embeddings.tolist(),
             metadatas=metadatas,
             ids=ids
         )
+        
         total_chunks += len(chunks)
         
-    print(f"\n✅ Ingesta completada. Total chunks indexados: {total_chunks}")
+    print(f"Ingesta completada. Total chunks indexados: {total_chunks}")
 
 if __name__ == "__main__":
     main()
