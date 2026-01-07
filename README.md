@@ -56,7 +56,7 @@ streamlit run app.py
 ```
 Abre el navegador en la dirección que aparece (ej. `http://localhost:8501`).
 
-## 📁 Estructura
+## Estructura
 - `ingest.py`: Script para descargar y procesar datos de Wikipedia.
 - `rag_engine.py`: Lógica del validador y conexión con el LLM.
 - `app.py`: Interfaz de usuario (Streamlit).
