@@ -41,9 +41,7 @@ def system_eval(frases_csv):
     df_res = pd.DataFrame(results)
     
     # Mostrar reporte de clasificación
-    print("\n" + "="*30)
     print(" REPORTE DE EVALUACIÓN")
-    print("="*30)
     print(classification_report(df_res['esperado'], df_res['pred']))
     
     # Guardado resultados a CSV

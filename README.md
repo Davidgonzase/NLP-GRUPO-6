@@ -1,21 +1,29 @@
-# 🕵️‍♂️ Sistema de Verificación de Hechos (RAG Local)
+# Sistema de Verificación de Hechos (RAG Local) Grupo 6
 
-Este proyecto implementa un sistema de **Verificación de Hechos (Fact-Checking)** que opera de manera local, utilizando **RAG (Retrieval-Augmented Generation)**. Combina una base de conocimientos creada a partir de Wikipedia con la inteligencia de **Llama 3** para verificar afirmaciones.
+Este proyecto implementa un sistema de **Verificación de Hechos (Fact-Checking)** que opera de manera local, utilizando **RAG (Retrieval-Augmented Generation)**. Combina una base de conocimientos creada a partir de Wikipedia con la inteligencia de **Llama 3**/**Qwen 3** para verificar afirmaciones.
 
-## 🚀 Características
-- **100% Privado y Local**: Inferencia mediante **Llama 3** corriendo en tu máquina vía Ollama.
-- **Transparente**: Cita las fuentes exactas (chunks de Wikipedia) utilizadas para el veredicto.
-- **Eficiente**: Usa **ChromaDB** para búsquedas vectoriales rápidas.
+## Características
+- Cita las fuentes exactas (chunks de Wikipedia) utilizadas para el veredicto.
+- Usa **ChromaDB** para búsquedas vectoriales rápidas.
+- Compatibilidad con diferentes idiomas
+- Muestra la confianza del sistema con su veredicto
+- GUI intuitiva y moderna
 
-## 🛠️ Requisitos Previos
+## Requisitos Previos
 
-1.  **Python 3.11** instalado.
-2.  **Ollama** instalado y corriendo. Descárgalo en [ollama.com](https://ollama.com).
+1.  Entorno **Python** en Conda o Venv 
+2.  **Ollama** instalado y corriendo.
+3.  Configuracion de un archivo .env que contenga las siguientes variables:
+    ```bash
+    OLLAMA_HOST=https://*Host-de-la-universidad*.uc3m.es/
+    OLLAMA_API_KEY=*Key-proporcionada*
+    WIKI_USER_AGENT=FactCheckerRAG/1.0 (contact: tucorreo@correo.com)
+    ```
 
-## ⚙️ Instalación
+## Instalación
 
-1.  **Clonar/Abrir el proyecto** en tu terminal.
-2.  **Crear un entorno virtual**:
+1.  **Clonar/Abrir el proyecto**.
+2.  **Crear un entorno virtual (o conda)**:
     ```bash
     python -m venv venv
     # Activar en Windows:
@@ -28,16 +36,15 @@ Este proyecto implementa un sistema de **Verificación de Hechos (Fact-Checking)
     pip install -r requirements.txt
     ```
 4.  **Preparar Ollama** (Llama 3):
-    Abre una terminal nueva (fuera de VS Code si es necesario) y ejecuta:
     ```bash
     ollama pull llama3
     ollama serve
     ```
 
-## 🏃‍♂️ Ejecución
+## Ejecución
 
 ### 1. Ingesta de Datos (ETL)
-Descarga artículos de Wikipedia y crea la base de datos vectorial local. (Requiere Internet solo para esta fase).
+Descarga automaticamente artículos de Wikipedia y crea la base de datos vectorial local.
 ```bash
 python ingest.py
 ```
@@ -47,7 +54,7 @@ Lanza la interfaz web local.
 ```bash
 streamlit run app.py
 ```
-Abre tu navegador en la dirección que aparece (ej. `http://localhost:8501`).
+Abre el navegador en la dirección que aparece (ej. `http://localhost:8501`).
 
 ## 📁 Estructura
 - `ingest.py`: Script para descargar y procesar datos de Wikipedia.
